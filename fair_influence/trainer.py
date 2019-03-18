@@ -1,7 +1,7 @@
 from typing import Callable
 
 import torch
-from torch.optim import Adam
+from torch.optim import SGD
 
 from .fairness import calc_pred_fairness
 
@@ -13,7 +13,7 @@ class Trainer():
 
   def _init_model_and_opt(self):
     self.model = self._get_model()
-    self.optimizer = Adam(self.params)
+    self.optimizer = SGD(self.params, lr=1e-2)
 
   @property
   def params(self):

@@ -23,7 +23,7 @@ def main():
   y_test  = y[:len(raw_test)]
   get_model = lambda: LogisticRegression(X_train.shape[1])
   trainer = Trainer(get_model, nn.BCELoss())
-  trainer.train(X_train, y_train, batch_size=1000, num_epochs=30)
+  trainer.train(X_train, y_train, batch_size=1000, num_epochs=30, reg=0.1)
   model = trainer.model
   model.eval()
   with torch.no_grad():
@@ -34,6 +34,7 @@ def main():
   print('model: KL p(y | white), p(y | nonwhite)', calc_pred_fairness(X_test, preds))
   print('retrain fairness', trainer.assess_influence_retrain(X_train,
                                                              y_train,
+                                                             reg=0.1,
                                                              batch_size=1000,
                                                              num_epochs=30,
                                                              lim=10,

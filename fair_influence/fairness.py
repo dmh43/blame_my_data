@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 
 def kl_div(p_1, p_2):
-  return p_1 * torch.log(p_1 / p_2)
+  t_1 = p_1 * torch.log(p_1 / p_2)
+  t_2 = (1 - p_1) * torch.log((1 - p_1) / (1 - p_2))
+  return t_1 + t_2
 
 def calc_dist_cond_protected(data, target, protected_col_idx, protected_val):
   matches = data[:, protected_col_idx] == protected_val

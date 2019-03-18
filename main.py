@@ -11,8 +11,9 @@ import pydash as _
 from fair_influence.fetchers import get_train_test_adult
 from fair_influence.preprocessing import prepare_adult
 from fair_influence.logistic_regression import LogisticRegression
-from fair_influence.fairness import kl_div, calc_dist_cond_protected, calc_fairness, calc_pred_fairness
+from fair_influence.fairness import calc_fairness, calc_pred_fairness, make_more_fair_retrain
 from fair_influence.trainer import Trainer
+from fair_influence.inference import eval_fairness, eval_acc
 
 def main():
   raw_train, raw_test = get_train_test_adult()
@@ -24,21 +25,11 @@ def main():
   get_model = lambda: LogisticRegression(X_train.shape[1])
   trainer = Trainer(get_model, nn.BCELoss())
   trainer.train(X_train, y_train, batch_size=1000, num_epochs=30, reg=0.1)
-  model = trainer.model
-  model.eval()
-  with torch.no_grad():
-    preds = (model(X_test) > 0.5)
-    print('acc:', torch.sum(preds.float() == y_test).float() / len(y_test))
+  print('acc:', eval_acc(trainer.model, X_test, y_test))
   print('train: KL p(y | white), p(y | nonwhite)', calc_fairness(X_train, y_train))
   print('test: KL p(y | white), p(y | nonwhite)', calc_fairness(X_test, y_test))
-  print('model: KL p(y | white), p(y | nonwhite)', calc_pred_fairness(X_test, preds))
-  influences = trainer.assess_influence_retrain(X_train, y_train, reg=0.1, batch_size=1000, num_epochs=1, verbose=False)
-  infs, idxs = torch.sort(influences)
-  trainer.retrain_leave_one_out(X_train, y_train, idxs[:100], batch_size=1000, num_epochs=30, reg=0.1, verbose=True)
-  model = trainer.model
-  model.eval()
-  with torch.no_grad():
-    preds = (model(X_test) > 0.5)
-  print('model: KL p(y | white), p(y | nonwhite)', calc_pred_fairness(X_test, preds))
+  print('model: KL p(y | white), p(y | nonwhite)', eval_fairness(trainer.model, X_test))
+  make_more_fair_retrain(trainer, X_train, y_train)
+  print('model retrain: KL p(y | white), p(y | nonwhite)', eval_fairness(trainer.model, X_test))
 
 if __name__ == "__main__": main()

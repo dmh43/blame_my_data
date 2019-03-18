@@ -19,7 +19,7 @@ class Trainer():
   def params(self):
     return list(self.model.parameters())
 
-  def train(self, data, target, reg=0.0, batch_size=1000, num_epochs=10, verbose=True):
+  def train(self, data, target, reg=0.0, batch_size=1000, num_epochs=30, verbose=True):
     for epoch_num in range(num_epochs):
       if verbose: print('Epoch', epoch_num)
       idxs = torch.randperm(len(data))

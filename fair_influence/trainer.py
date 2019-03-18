@@ -38,13 +38,13 @@ class Trainer():
                                verbose=True):
     fairness = []
     for idx in range(min(len(data), lim) if lim is not None else len(data)):
-      self._retrain_leave_one_out(data, target, idx, reg, batch_size, num_epochs, verbose)
+      self.retrain_leave_one_out(data, target, idx, reg, batch_size, num_epochs, verbose)
       self.model.eval()
       preds = self.model(data) > 0.5
       fairness.append(calc_pred_fairness(data, preds).item())
     return torch.tensor(fairness)
 
-  def _retrain_leave_one_out(self, data, target, idx_to_leave_out, reg, batch_size, num_epochs, verbose):
+  def retrain_leave_one_out(self, data, target, idx_to_leave_out, reg, batch_size, num_epochs, verbose):
     self._init_model_and_opt()
     mask = torch.ones(len(data), dtype=torch.uint8)
     mask[idx_to_leave_out] = 0

@@ -32,12 +32,13 @@ def main():
   print('train: KL p(y | white), p(y | nonwhite)', calc_fairness(X_train, y_train))
   print('test: KL p(y | white), p(y | nonwhite)', calc_fairness(X_test, y_test))
   print('model: KL p(y | white), p(y | nonwhite)', calc_pred_fairness(X_test, preds))
-  print('retrain fairness', trainer.assess_influence_retrain(X_train,
-                                                             y_train,
-                                                             reg=0.1,
-                                                             batch_size=1000,
-                                                             num_epochs=30,
-                                                             lim=10,
-                                                             verbose=False))
+  influences = trainer.assess_influence_retrain(X_train, y_train, reg=0.1, batch_size=1000, num_epochs=1, verbose=False)
+  infs, idxs = torch.sort(influences)
+  trainer.retrain_leave_one_out(X_train, y_train, idxs[:100], batch_size=1000, num_epochs=30, reg=0.1, verbose=True)
+  model = trainer.model
+  model.eval()
+  with torch.no_grad():
+    preds = (model(X_test) > 0.5)
+  print('model: KL p(y | white), p(y | nonwhite)', calc_pred_fairness(X_test, preds))
 
 if __name__ == "__main__": main()

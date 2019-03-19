@@ -27,3 +27,10 @@ fairness, we select a subset that is most responsible for the
 unfairness exhibited on the test set. Similar to [[https://arxiv.org/pdf/1810.10118.pdf][Khanna et al.]], we
 take advantage of the submodularity of this objective and greedily
 insert training examples into this set.
+** Results
+| Method                     | Unfairness | Accuracy |
+|----------------------------+------------+----------|
+| Original                   | 5.5793e-06 |   0.8154 |
+| Retrain, drop top 100      |         ?? |       ?? |
+| Influence, drop top 100    | 1.4734e-07 |   0.8149 |
+| Influence, drop bottom 100 |     1.0e-4 |   0.8166 |

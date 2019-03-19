@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import numpy.linalg as la
 import numpy.random as rn
@@ -30,14 +32,17 @@ def main():
   print('train: KL p(y | white), p(y | nonwhite)', calc_fairness(X_train, y_train))
   print('test: KL p(y | white), p(y | nonwhite)', calc_fairness(X_test, y_test))
   print('model: KL p(y | white), p(y | nonwhite)', eval_fairness(trainer.model, X_test))
-  # make_more_fair_retrain(trainer, X_train, y_train, X_test)
-  # print('model retrain: KL p(y | white), p(y | nonwhite)', eval_fairness(trainer.model, X_test))
-  calc_hvp_inv = lambda grads: calc_log_reg_hvp_inverse(trainer.model, X_train, grads)
-  calc_grad = lambda data, target: calc_log_reg_grad(trainer.model, data, target)
-  calc_dkl_grad = lambda data, target: calc_log_reg_dkl_grad(trainer.model, data, target)
-  s_tests = calc_s_tests(calc_hvp_inv, calc_dkl_grad, X_test, y_test)
-  influences = calc_influences(calc_grad, s_tests, X_train, y_train)
-  infs, idxs = torch.sort(influences.squeeze(), descending=True)
-  trainer.retrain_leave_one_out(X_train, y_train, idxs[:100], reg=0.1, batch_size=1000, num_epochs=30, verbose=True)
+  if '--retrain' in sys.argv:
+    make_more_fair_retrain(trainer, X_train, y_train, X_test)
+    print('model retrain: KL p(y | white), p(y | nonwhite)', eval_fairness(trainer.model, X_test))
+  else:
+    calc_hvp_inv = lambda grads: calc_log_reg_hvp_inverse(trainer.model, X_train, grads)
+    calc_grad = lambda data, target: calc_log_reg_grad(trainer.model, data, target)
+    calc_dkl_grad = lambda data, target: calc_log_reg_dkl_grad(trainer.model, data, target)
+    s_tests = calc_s_tests(calc_hvp_inv, calc_dkl_grad, X_test, y_test)
+    influences = calc_influences(calc_grad, s_tests, X_train, y_train)
+    infs, idxs = torch.sort(influences.squeeze(), descending=True)
+    trainer.retrain_leave_one_out(X_train, y_train, idxs[:100], reg=0.1, batch_size=1000, num_epochs=30, verbose=True)
+    print('model: KL p(y | white), p(y | nonwhite)', eval_fairness(trainer.model, X_test))
 
 if __name__ == "__main__": main()

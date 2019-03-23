@@ -28,9 +28,10 @@ unfairness exhibited on the test set. Similar to [[https://arxiv.org/pdf/1810.10
 take advantage of the submodularity of this objective and greedily
 insert training examples into this set.
 ** Results
-| Method                     | Unfairness | Accuracy |
-|----------------------------+------------+----------|
-| Original                   | 5.5793e-06 |   0.8154 |
-| Retrain, drop top 100      |         ?? |       ?? |
-| Influence, drop top 100    | 1.4734e-07 |   0.8149 |
-| Influence, drop bottom 100 |     1.0e-4 |   0.8166 |
+| Method                                           | Unfairness | Accuracy |
+|--------------------------------------------------+------------+----------|
+| Original                                         | 5.5793e-06 |   0.8154 |
+| Dropping random non-protected and positive class | 5.3226e-06 |   0.8148 |
+| Retrain, drop top 100                            |         ?? |       ?? |
+| Influence, drop top 100                          | 1.4734e-07 |   0.8149 |
+| Influence, drop bottom 100                       |     1.0e-4 |   0.8166 |

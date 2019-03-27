@@ -34,3 +34,6 @@ insert training examples into this set.
 | Dropping random non-protected and positive class |     0.0002 |   0.7697 |
 | Retrain, drop top 100                            |         ?? |       ?? |
 | Influence, drop all with harmful influence       |     0.0001 |   0.7698 |
+
+#+CAPTION: Looking at the first two principal directions of the Fisher embeddings of the training set reveals that the distribution of points that are most helful towards the learning of a fair discriminative model cover a larger part of the distribution. The training points that most explain the unfairness of the original model are mostly concentrated around the same region.
+[[./fish_pca_hurtful.png]]

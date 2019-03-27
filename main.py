@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import pandas as pd
+import seaborn as sns
 
 import pydash as _
 
@@ -59,8 +60,15 @@ def main():
   mask = torch.ones(len(X_train), dtype=torch.uint8)
   mask[idxs_to_drop] = 0
   helpful, hurtful = scatter_dists(fisher_vectors[idxs_to_drop], fisher_vectors[mask])
-  plt.scatter(*helpful.T, c='blue', s=10)
-  plt.scatter(*hurtful.T, c='red', s=10)
+  plt.close()
+  plt.figure()
+  # plt.scatter(*helpful.T, c='blue', s=1, label='helpful')
+  # plt.scatter(*hurtful.T, c='red', s=1, label='harmful')
+  sns.scatterplot(*helpful[torch.empty(len(helpful)).bernoulli(0.1).nonzero().squeeze()].T, label='helpful', palette="Set2", marker='+', s=30)
+  sns.scatterplot(*hurtful[torch.empty(len(hurtful)).bernoulli(0.1).nonzero().squeeze()].T, label='hurtful', palette="Set2", marker='x', s=30)
+  plt.title('First two principal directions of Fisher embeddings of training points ')
+  plt.legend()
+  plt.savefig('./fish_pca_hurtful.png')
   # pd.Series(X_train[:, -1][idxs] == y_train[idxs]).rolling(1000).mean().plot()
   # percentage in the protected class AND less than 50k
 

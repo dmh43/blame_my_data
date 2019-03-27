@@ -5,7 +5,9 @@ def prepare_adult(df: pd.DataFrame,
                   protected='race',
                   primary='White') -> np.ndarray:
   col_names = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country']
+  col_names = list(set(df.columns).intersection(set(col_names)))
   cat_names = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country']
+  cat_names = list(set(df.columns).intersection(set(cat_names)))
   not_cat_names = list(set(col_names) - set(cat_names))
   except_protected_names = [name for name in cat_names if name != protected]
   not_cat = df[not_cat_names]

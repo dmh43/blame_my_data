@@ -49,6 +49,7 @@ def make_more_fair_retrain(trainer, data, target, test_data, num_to_drop=100, re
   impacts = assess_impact_retrain(trainer, data, target, test_data, reg=reg, batch_size=batch_size, num_epochs=num_epochs, verbose=verbose)
   infs, idxs = torch.sort(impacts)
   trainer.retrain_leave_one_out(data, target, idxs[:num_to_drop], reg=reg, batch_size=batch_size, num_epochs=num_epochs, verbose=verbose)
+  return impacts
 
 def assess_impact_influence(trainer,
                             data,

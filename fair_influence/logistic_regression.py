@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class LogisticRegression(nn.Module):
+class TorchLogisticRegression(nn.Module):
   def __init__(self, num_features):
     super().__init__()
     self.lin = nn.Linear(num_features, 1)

@@ -8,7 +8,7 @@ from .influence import calc_log_reg_hessian_inverse, calc_log_reg_grad
 
 def scatter_dists(group_1, group_2):
   data = np.concatenate([group_1, group_2])
-  model = PCA(n_components=2)
+  model = PCA(whiten=True, n_components=2)
   model.fit(data)
   return model.transform(group_1), model.transform(group_2)
 

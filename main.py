@@ -45,13 +45,13 @@ def main():
     calc_grad = lambda model, data, target: calc_log_reg_grad(model, data, target)
     calc_dkl_grad = lambda model, data, target: calc_log_reg_dkl_grad(model, data, target)
     s_tests = calc_s_tests(unfair_model, calc_hvp_inv, calc_dkl_grad, X_test, y_test, reg=0.06)
-    influences = calc_influences(unfair_model, calc_grad, s_tests, X_train, y_train)
+    influences = calc_influences(unfair_model, calc_grad, s_tests, X_train, y_train).squeeze()
     idxs_to_drop = (influences > 0).nonzero()[:, 0]
     trainer.retrain_leave_one_out(X_train, y_train, idxs_to_drop, reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
     fair_model = trainer.model
     print('model retrain: KL p(y | female), p(y | male)', eval_fairness(fair_model, X_test))
     print('acc:', eval_acc(fair_model, X_test, y_test))
-  female = (X_train[:, -1].int() & y_train.int()).nonzero().squeeze()
+  female = ((X_train[:, -1].byte()).int() & y_train.int()).nonzero().squeeze()
   trainer.retrain_leave_one_out(X_train, y_train, female[:len(idxs_to_drop)], reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
   female_model = trainer.model
   print('female model retrain: KL p(y | female), p(y | male)', eval_fairness(female_model, X_test))

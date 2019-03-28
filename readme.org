@@ -28,12 +28,33 @@ unfairness exhibited on the test set. Similar to [[https://arxiv.org/pdf/1810.10
 take advantage of the submodularity of this objective and greedily
 insert training examples into this set.
 ** Results
-| Method                                           | Unfairness | Accuracy |
-|--------------------------------------------------+------------+----------|
-| Original                                         |     0.0553 |   0.8107 |
-| Dropping random non-protected and positive class |     0.0002 |   0.7697 |
-| Retrain, drop top 100                            |         ?? |       ?? |
-| Influence, drop all with harmful influence       |     0.0001 |   0.7698 |
+| Method                                                                 | Unfairness | Accuracy |
+|------------------------------------------------------------------------+------------+----------|
+| Original                                                               |     0.0553 |   0.8107 |
+| Dropping random non-protected and positive class                       |     0.0002 |   0.7697 |
+| Balancing distribution of positive and negative across protected class |     0.0058 |   0.7915 |
+| Retrain, drop top 100                                                  |         ?? |       ?? |
+| Influence, drop all with harmful influence                             |     0.0001 |   0.7698 |
 
-#+CAPTION: Looking at the first two principal directions of the Fisher embeddings of the training set reveals that the distribution of points that are most helful towards the learning of a fair discriminative model cover a larger part of the distribution. The training points that most explain the unfairness of the original model are mostly concentrated around the same region.
+#+CAPTION: Looking at the first two principal directions of the Fisher embeddings of the training set reveals that the distribution of points that are most helful towards the learning of a fair discriminative model cover a larger part of the distribution. The training points that most explain the unfairness of the original model are mostly concentrated around the same region. From a quantitative perspective, the variances of the helpful and hurtful sets are 1.9 and 0.33, respectively.
 [[./fish_pca_hurtful.png]]
+
+#+CAPTION: Distribution of training points dropped by influence approach. Perhaps surprisingly, this approach drops training points that we would expect to help the protected class. This suggests that the influence functions approach is making a more informed decision than simply rebalancing the training data. This is confirmed by the experimental results in table \ref{tab:results}
+   | Is Male | >=50k | Fraction of dropped examples |
+   |---------+-------+------------------------------|
+   | X       | X     |                         0.66 |
+   | X       |       |                         0.20 |
+   |         | X     |                         0.12 |
+   |         |       |                         0.02 |
+
+Further inspection of the values dropped by the influence functions
+method reveals that the distribution of the features in the protected
+class better matches the distribution in the non-protected class. For
+example, before dropping training examples, examining training points
+in the positive class (earning more than \$50k per year), the mean
+hours per week worked by women in the training set is 36 hours, while
+for men it is 42 hours. After dropping the training examples deemed
+harmful by the influence function method, the mean value for women
+increases to 43 hours. This is consistent with intuition which tells
+us that in order to achieve demographic parity, the protected
+attribute should not be correlated with the prediction.

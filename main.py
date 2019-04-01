@@ -38,8 +38,13 @@ def main():
   print('test: KL p(y | female), p(y | male)', calc_fairness(X_test, y_test))
   print('model: KL p(y | female), p(y | male)', eval_fairness(unfair_model, X_test))
   if '--retrain' in sys.argv:
-    impacts = make_more_fair_retrain(trainer, X_train, y_train, X_test)
-    fair_model = trainer.model
+    impacts = make_more_fair_retrain(trainer, X_train, y_train, X_test, reg=0.0, batch_size=1000, num_epochs=1, verbose=False)
+    retrain_fair_model = trainer.model
+    idxs_to_drop = (impacts > eval_fairness(unfair_model, X_test)).nonzero()[:, 0]
+    trainer.retrain_leave_one_out(X_train, y_train, idxs_to_drop, reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
+    neg_retrain_fair_model = trainer.model
+    print('model loo retrain: KL p(y | female), p(y | male)', eval_fairness(neg_retrain_fair_model, X_test))
+    print('acc:', eval_acc(neg_retrain_fair_model, X_test, y_test))
   else:
     calc_hvp_inv = lambda model, grads, reg: calc_log_reg_hvp_inverse(model, X_train, grads, reg=reg)
     calc_grad = lambda model, data, target: calc_log_reg_grad(model, data, target)
@@ -71,5 +76,11 @@ def main():
   plt.savefig('./fish_pca_hurtful.png')
   # pd.Series(X_train[:, -1][idxs] == y_train[idxs]).rolling(1000).mean().plot()
   # percentage in the protected class AND less than 50k
+
+  remain = raw_train.iloc[list(set(range(len(X_train))) - set(idxs_to_drop.tolist()))]
+  remain_X = X_train[list(set(range(len(X_train))) - set(idxs_to_drop.tolist()))]
+  remain_y = y_train[list(set(range(len(y_train))) - set(idxs_to_drop.tolist()))]
+  orig_corrs = [np.corrcoef(X_train[:, i], y_train)[0, 1] for i in range(X_train.shape[1])]
+  remain_corrs = [np.corrcoef(remain_X[:, i], remain_y)[0, 1] for i in range(remain_X.shape[1])]
 
 if __name__ == "__main__": main()

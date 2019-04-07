@@ -27,7 +27,8 @@ def calc_pred_fairness(data, preds, protected_col_idx=-1):
 def eval_fairness(model, data):
   model.eval()
   with torch.no_grad():
-    preds = (model(data) > 0.5)
+    # preds = (model(data) > 0.5)
+    preds = model(data)
   return calc_pred_fairness(data, preds)
 
 def assess_impact_retrain(trainer,

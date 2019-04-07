@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import seaborn as sns
+from random import seed
 
 import pydash as _
 
@@ -84,35 +85,58 @@ def adult_analysis():
   remain_corrs = [np.corrcoef(remain_X[:, i], remain_y)[0, 1] for i in range(remain_X.shape[1])]
 
 def saf_analysis():
+  seed(1)
   raw_train, raw_test = get_train_test_saf()
-  X, y = [torch.tensor(arr) for arr in prepare_saf(pd.concat([raw_train, raw_test]))]
-  X_train = X[:len(raw_train)]
-  y_train = y[:len(raw_train)]
-  X_test  = X[len(raw_train):len(raw_train) + len(raw_test)]
-  y_test  = y[len(raw_train):len(raw_train) + len(raw_test)]
+  data = pd.concat([raw_train, raw_test])
+  X, y = [torch.tensor(arr) for arr in prepare_saf(data,
+                                                   target='frisked',
+                                                   protected='race',
+                                                   primary='W')]
+
+  # X_train = X[:len(raw_train)]
+  # y_train = y[:len(raw_train)]
+  # X_test  = X[len(raw_train):len(raw_train) + len(raw_test)]
+  # y_test  = y[len(raw_train):len(raw_train) + len(raw_test)]
+
+  pct = ~(raw_train.pct == 40)
+  # pct = raw_train.pct < 70
+  not_pct = ~pct
+  pct = pct.nonzero()[0]
+  not_pct = not_pct.nonzero()[0]
+  X_train = X[pct]
+  y_train = y[pct]
+  X_test  = X[not_pct]
+  y_test  = y[not_pct]
+  print('train: KL p(y | nonwhite), p(y | white)', calc_fairness(X_train, y_train))
+  print('test: KL p(y | nonwhite), p(y | white)', calc_fairness(X_test, y_test))
   get_model = lambda: TorchLogisticRegression(X_train.shape[1])
   trainer = Trainer(get_model, nn.BCELoss())
   trainer.train(X_train, y_train, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
   unfair_model = trainer.model
   print('acc:', eval_acc(unfair_model, X_test, y_test))
-  print('train: KL p(y | female), p(y | male)', calc_fairness(X_train, y_train))
-  print('test: KL p(y | female), p(y | male)', calc_fairness(X_test, y_test))
-  print('model: KL p(y | female), p(y | male)', eval_fairness(unfair_model, X_test))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_train))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_test))
   calc_hvp_inv = lambda model, grads, reg: calc_log_reg_hvp_inverse(model, X_train, grads, reg=reg)
   calc_grad = lambda model, data, target: calc_log_reg_grad(model, data, target)
   calc_dkl_grad = lambda model, data, target: calc_log_reg_dkl_grad(model, data, target)
-  s_tests = calc_s_tests(unfair_model, calc_hvp_inv, calc_dkl_grad, X_test, y_test, reg=0.06)
+  s_tests = calc_s_tests(unfair_model, calc_hvp_inv, calc_dkl_grad, X_test, y_test, reg=0.05)
   influences = calc_influences(unfair_model, calc_grad, s_tests, X_train, y_train).squeeze()
   idxs_to_drop = (influences > 0).nonzero()[:, 0]
+  not_idxs_to_drop = (influences <= 0).nonzero()[:, 0]
   trainer.retrain_leave_one_out(X_train, y_train, idxs_to_drop, reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
   fair_model = trainer.model
-  print('model retrain: KL p(y | female), p(y | male)', eval_fairness(fair_model, X_test))
+  print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_train))
+  print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_test))
   print('acc:', eval_acc(fair_model, X_test, y_test))
-  female = ((X_train[:, -1].byte()).int() & y_train.int()).nonzero().squeeze()
-  trainer.retrain_leave_one_out(X_train, y_train, female[:len(idxs_to_drop)], reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
-  female_model = trainer.model
-  print('female model retrain: KL p(y | female), p(y | male)', eval_fairness(female_model, X_test))
-  print('acc:', eval_acc(female_model, X_test, y_test))
+  nonwhite = ((X_train[:, -1].byte()).int() & y_train.int()).nonzero().squeeze()
+  trainer.retrain_leave_one_out(X_train, y_train, nonwhite[:len(idxs_to_drop)], reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
+  nonwhite_model = trainer.model
+  print('nonwhite model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(nonwhite_model, X_train))
+  print('nonwhite model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(nonwhite_model, X_test))
+  print('acc:', eval_acc(nonwhite_model, X_test, y_test))
+
+  infs, idxs = torch.sort(influences, descending=True)
+  raw_train.iloc[idxs[:100]]
 
 
 def main():

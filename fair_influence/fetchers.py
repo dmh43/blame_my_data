@@ -13,8 +13,9 @@ def get_train_test_saf():
   saf = saf[[col
              for col in saf.columns
              if col not in ['perstop']]]
+  saf.age = saf.age.map(lambda val: 20 if val == '**' else int(val))
   idxs = list(range(len(saf)))
-  shuffle(idxs)
+  # shuffle(idxs)
   train = saf.iloc[idxs[:int(0.8 * len(saf))]]
   test = saf.iloc[idxs[int(0.8 * len(saf)):]]
   return train, test

@@ -1,4 +1,5 @@
 import sys
+from operator import itemgetter
 
 import numpy as np
 import numpy.linalg as la
@@ -10,6 +11,8 @@ import pandas as pd
 import seaborn as sns
 from random import seed
 
+from scipy.stats import kendalltau
+
 import pydash as _
 
 from fair_influence.fetchers import get_train_test_adult, get_train_test_saf
@@ -20,6 +23,7 @@ from fair_influence.trainer import Trainer
 from fair_influence.inference import eval_acc
 from fair_influence.influence import calc_log_reg_hvp_inverse, calc_log_reg_grad, calc_s_tests, calc_influences, calc_log_reg_dkl_grad
 from fair_influence.explore import scatter_dists, get_fisher_vectors
+from fair_influence.helpers import colgetter
 
 def adult_analysis():
   raw_train, raw_test = get_train_test_adult()
@@ -117,10 +121,17 @@ def saf_analysis():
   print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_train))
   print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_test))
   calc_hvp_inv = lambda model, grads, reg: calc_log_reg_hvp_inverse(model, X_train, grads, reg=reg)
-  calc_grad = lambda model, data, target: calc_log_reg_grad(model, data, target)
-  calc_dkl_grad = lambda model, data, target: calc_log_reg_dkl_grad(model, data, target)
-  s_tests = calc_s_tests(unfair_model, calc_hvp_inv, calc_dkl_grad, X_test, y_test, reg=0.05)
-  influences = calc_influences(unfair_model, calc_grad, s_tests, X_train, y_train).squeeze()
+  s_tests = calc_s_tests(unfair_model,
+                         calc_hvp_inv,
+                         calc_log_reg_dkl_grad,
+                         X_test,
+                         y_test,
+                         reg=0.05)
+  influences = calc_influences(unfair_model,
+                               calc_log_reg_grad,
+                               s_tests,
+                               X_train,
+                               y_train).squeeze()
   idxs_to_drop = (influences > 0).nonzero()[:, 0]
   not_idxs_to_drop = (influences <= 0).nonzero()[:, 0]
   trainer.retrain_leave_one_out(X_train, y_train, idxs_to_drop, reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
@@ -138,6 +149,50 @@ def saf_analysis():
   infs, idxs = torch.sort(influences, descending=True)
   raw_train.iloc[idxs[:100]]
 
+def saf_provenance_analysis():
+  seed(1)
+  raw_train, raw_test = get_train_test_saf()
+  data = pd.concat([raw_train, raw_test])
+  X, y = [torch.tensor(arr) for arr in prepare_saf(data,
+                                                   target='frisked',
+                                                   protected='race',
+                                                   primary='W')]
+  get_model = lambda: TorchLogisticRegression(X.shape[1])
+  trainer = Trainer(get_model, nn.BCELoss())
+  trainer.train(X, y, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
+  unfair_model = trainer.model
+  print('acc:', eval_acc(unfair_model, X, y))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X))
+  influences_by_pct = {}
+  pct_nums = data.pct.unique()
+  for pct_num in pct_nums:
+    pct = raw_train.pct == pct_num
+    not_pct = ~pct
+    pct = pct.nonzero()[0]
+    not_pct = not_pct.nonzero()[0]
+    X_train_pct = X[pct]
+    y_train_pct = y[pct]
+    X_test_pct  = X[not_pct]
+    y_test_pct  = y[not_pct]
+    calc_hvp_inv = lambda model, grads, reg, X_train_pct=X_train_pct: calc_log_reg_hvp_inverse(model, X_train_pct, grads, reg=reg)
+    s_tests = calc_s_tests(unfair_model,
+                           calc_hvp_inv,
+                           calc_log_reg_dkl_grad,
+                           X_test_pct,
+                           y_test_pct,
+                           reg=0.05)
+    influences = calc_influences(unfair_model,
+                                 calc_log_reg_grad,
+                                 s_tests,
+                                 X_train_pct,
+                                 y_train_pct).squeeze()
+    pct_influence = influences.sum()
+    influences_by_pct[pct_num] = pct_influence.item()
+
+  frisk_white_by_pct = {pct_num: ((data.race[data.pct == pct_num] == 'W') & (data.frisked[data.pct == pct_num] == 'Y')).mean() for pct_num in pct_nums}
+  pct_ranked_by_influence = sorted(influences_by_pct.items(), key=itemgetter(1))
+  pct_ranked_by_frisk_white = sorted(frisk_white_by_pct.items(), key=itemgetter(1))
+  print(kendalltau(*map(colgetter(0), (pct_ranked_by_influence, pct_ranked_by_frisk_white))))
 
 def main():
   # adult_analysis()

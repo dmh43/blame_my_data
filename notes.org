@@ -1,0 +1,29 @@
+\begin{table}[htbp]
+\caption{Distribution of training points dropped by influence approach. Perhaps surprisingly, this approach drops training points that we would expect to help the protected class. This suggests that the influence functions approach is making a more informed decision than simply rebalancing the training data. This is confirmed by the experimental results in table \ref{tab:results}}
+\centering
+\begin{tabular}{llr}
+Is Male & $\ge$ 50k & Fraction of dropped examples\\
+\hline
+X & X & 0.66\\
+X &  & 0.20\\
+ & X & 0.12\\
+ &  & 0.02\\
+\end{tabular}
+\end{table}
+
+Further inspection of the values dropped by the influence functions
+method reveals that the distribution of the features in the protected
+class better matches the distribution in the non-protected class. For
+example, before dropping training examples, examining training points
+in the positive class (earning more than \$50k per year), the mean
+hours per week worked by women in the training set is 36 hours, while
+for men it is 42 hours. After dropping the training examples deemed
+harmful by the influence function method, the mean value for women
+increases to 43 hours. This is consistent with intuition which tells
+us that in order to achieve demographic parity, the protected
+attribute should not be correlated with the prediction. The shortcomings of the greedy selection approach is clear here, since training points that have been dropped from the training set does not inform future selections. As a result, the dataset 'cleanup' is only approximate.
+
+Another interesting application of this approach is for investigating sources of unfairness. 
+It would be interesting to see what information can be drawn from a dataset containing 
+information about stop-and-frisk occurrences. For example, it is possible that the influence functions method
+would explain the disparate impact of a model as originating from training points with from a certain demographic.

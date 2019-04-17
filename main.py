@@ -11,7 +11,10 @@ import pandas as pd
 import seaborn as sns
 from random import seed
 
-from scipy.stats import kendalltau
+from scipy.stats import kendalltau, pearsonr, spearmanr
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import tree
+import graphviz
 
 import pydash as _
 
@@ -154,9 +157,10 @@ def saf_provenance_analysis():
   raw_train, raw_test = get_train_test_saf()
   data = pd.concat([raw_train, raw_test])
   X, y = [torch.tensor(arr) for arr in prepare_saf(data,
-                                                   target='frisked',
+                                                   target=['contrabn', 'adtlrept', 'pistol', 'riflshot', 'asltweap', 'knifcuti', 'machgun', 'othrweap'],
                                                    protected='race',
-                                                   primary='W')]
+                                                   primary='W',
+                                                   no_cats=True)]
   get_model = lambda: TorchLogisticRegression(X.shape[1])
   trainer = Trainer(get_model, nn.BCELoss())
   trainer.train(X, y, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
@@ -189,10 +193,58 @@ def saf_provenance_analysis():
     pct_influence = influences.sum()
     influences_by_pct[pct_num] = pct_influence.item()
 
-  frisk_white_by_pct = {pct_num: ((data.race[data.pct == pct_num] == 'W') & (data.frisked[data.pct == pct_num] == 'Y')).mean() for pct_num in pct_nums}
+  frisk_white_by_pct = {pct_num: ((data.race[data.pct == pct_num] == 'W') & y[(data.pct == pct_num).nonzero()].byte()).mean() for pct_num in pct_nums}
   pct_ranked_by_influence = sorted(influences_by_pct.items(), key=itemgetter(1))
   pct_ranked_by_frisk_white = sorted(frisk_white_by_pct.items(), key=itemgetter(1))
   print(kendalltau(*map(colgetter(0), (pct_ranked_by_influence, pct_ranked_by_frisk_white))))
+
+  for r in ['W', 'B']:
+    print(r, 'y overall', ((data.race==r) & y.byte()).values.sum() / (data.race==r).values.sum())
+    print(r, 'not y overall', ((data.race==r) & pd.Series(~y.byte())).values.sum() / (data.race==r).values.sum())
+    pct = 106
+    print(r, f'y pct {pct}',
+          ((data.pct == pct) & (data.race==r) & pd.Series(y.byte())).values.sum() / ((data.pct == pct) & (data.race==r)).values.sum())
+    print(r, 'not y pct 106',
+          ((data.pct == pct) & (data.race==r) & pd.Series(~y.byte())).values.sum() / ((data.pct == pct) & (data.race==r)).values.sum())
+
+  calc_hvp_inv = lambda model, grads, reg, X_train_pct=X_train_pct: calc_log_reg_hvp_inverse(model, X, grads, reg=reg)
+  s_tests = calc_s_tests(unfair_model,
+                         calc_hvp_inv,
+                         calc_log_reg_dkl_grad,
+                         X,
+                         y,
+                         reg=0.05)
+  influences = calc_influences(unfair_model,
+                               calc_log_reg_grad,
+                               s_tests,
+                               X,
+                               y).squeeze()
+
+  # fisher_vectors = get_fisher_vectors(unfair_model, X, y)
+  model = DecisionTreeClassifier(max_depth=3)
+  # model.fit(fisher_vectors, influences > 0)
+  model.fit(np.concatenate([X, y[:, np.newaxis]], 1), influences > 0)
+  dot_data = tree.export_graphviz(model, out_file=None)
+  graph = graphviz.Source(dot_data)
+  graph.render("iris")
+
+  plt.hist(influences[X[:, -1].nonzero()].squeeze(), bins=100, label='W', density=True)
+  plt.hist(influences[(~X[:, -1].byte()).nonzero()].squeeze(), bins=100, label='~W', density=True)
+  plt.legend()
+  plt.show()
+
+  corrs = {}
+  for col_name in data.columns:
+    if col_name == 'race':
+      corr, p = spearmanr(data[col_name] == 'W', influences)
+      corrs[col_name] = 0.0 if np.isnan(corr) else corr
+    try:
+      # corrs[col_name] = pearsonr(data[col_name] == 'Y', data.race == 'W')[0]
+      corr, p = spearmanr(data[col_name] == 'Y', influences)
+      corrs[col_name] = 0.0 if np.isnan(corr) else corr
+    except:
+      pass
+  cols_by_corr = sorted(corrs.items(), key=itemgetter(1))
 
 def main():
   # adult_analysis()

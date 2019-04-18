@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import seaborn as sns
-from random import seed
+from random import seed, sample
 
 from scipy.stats import kendalltau, pearsonr, spearmanr
 from sklearn.tree import DecisionTreeClassifier
@@ -259,39 +259,43 @@ def saf_active_learning():
                                                    no_cats=True)]
 
   for num in [1000, 800, 500, 10]:
-    holdout_idxs = X[:, -1].nonzero()[-num:].squeeze()
-    keep_idxs = np.array(list(set(range(len(X))) - set(holdout_idxs.tolist())))
-    X_holdout = X[holdout_idxs]
-    y_holdout = y[holdout_idxs]
-    X_sampled = X[keep_idxs]
-    y_sampled = y[keep_idxs]
+    first_holdout_idx = int(X[:, -1].nonzero()[-num])
+    white_holdout = X[:, -1].nonzero()[-num:].squeeze()
+    all_holdout = np.array(sample(range(first_holdout_idx, len(X)), len(white_holdout)))
+    for method, holdout_idxs in (('white', white_holdout), ('all', all_holdout)):
+      X_holdout = X[holdout_idxs]
+      y_holdout = y[holdout_idxs]
+      keep_idxs = np.array(list(set(range(len(X))) - set(holdout_idxs.tolist())))
+      X_sampled = X[keep_idxs]
+      y_sampled = y[keep_idxs]
 
-    get_model = lambda: TorchLogisticRegression(X_sampled.shape[1])
-    trainer = Trainer(get_model, nn.BCELoss())
-    trainer.train(X_sampled, y_sampled, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
-    unfair_model = trainer.model
-    print('num W withheld', num)
-    print('acc:', eval_acc(unfair_model, X_sampled, y_sampled))
-    print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_sampled), np.log(eval_fairness(unfair_model, X_sampled)))
+      get_model = lambda: TorchLogisticRegression(X_sampled.shape[1])
+      trainer = Trainer(get_model, nn.BCELoss())
+      trainer.train(X_sampled, y_sampled, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
+      unfair_model = trainer.model
+      print('sampling', method)
+      print('num W withheld', num)
+      print('acc:', eval_acc(unfair_model, X_sampled, y_sampled))
+      print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_sampled), np.log(eval_fairness(unfair_model, X_sampled)))
 
-    calc_hvp_inv = lambda model, grads, reg, X_sampled=X_sampled: calc_log_reg_hvp_inverse(model, X_sampled, grads, reg=reg)
-    s_tests = calc_s_tests(unfair_model,
-                           calc_hvp_inv,
-                           calc_log_reg_dkl_grad,
-                           X_sampled,
-                           y_sampled,
-                           reg=0.05)
-    influences = calc_influences(unfair_model,
-                                 calc_log_reg_grad,
-                                 s_tests,
-                                 X_sampled,
-                                 y_sampled).squeeze()
+      calc_hvp_inv = lambda model, grads, reg, X_sampled=X_sampled: calc_log_reg_hvp_inverse(model, X_sampled, grads, reg=reg)
+      s_tests = calc_s_tests(unfair_model,
+                             calc_hvp_inv,
+                             calc_log_reg_dkl_grad,
+                             X_sampled,
+                             y_sampled,
+                             reg=0.05)
+      influences = calc_influences(unfair_model,
+                                   calc_log_reg_grad,
+                                   s_tests,
+                                   X_sampled,
+                                   y_sampled).squeeze()
 
-    plt.figure()
-    plt.hist(np.log(np.abs(influences[X_sampled[:, -1].nonzero()].squeeze())), bins=100, label='W', density=True)
-    plt.hist(np.log(np.abs(influences[(~X_sampled[:, -1].byte()).nonzero()].squeeze())), bins=100, label='~W', density=True)
-    plt.legend()
-    plt.savefig('withhold_' + str(num) + 'W' + '.png')
+      plt.figure()
+      plt.hist(np.log(np.abs(influences[X_sampled[:, -1].nonzero()].squeeze())), bins=100, label='W', density=True)
+      plt.hist(np.log(np.abs(influences[(~X_sampled[:, -1].byte()).nonzero()].squeeze())), bins=100, label='~W', density=True)
+      plt.legend()
+      plt.savefig('withhold_' + str(num) + method + '.png')
   plt.close()
 
   calc_hvp_inv = lambda model, grads, reg, X=X: calc_log_reg_hvp_inverse(model, X, grads, reg=reg)

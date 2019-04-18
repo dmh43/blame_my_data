@@ -13,6 +13,8 @@ from random import seed
 
 from scipy.stats import kendalltau, pearsonr, spearmanr
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.decomposition import PCA
 from sklearn import tree
 import graphviz
 
@@ -207,7 +209,7 @@ def saf_provenance_analysis():
     print(r, 'not y pct 106',
           ((data.pct == pct) & (data.race==r) & pd.Series(~y.byte())).values.sum() / ((data.pct == pct) & (data.race==r)).values.sum())
 
-  calc_hvp_inv = lambda model, grads, reg, X_train_pct=X_train_pct: calc_log_reg_hvp_inverse(model, X, grads, reg=reg)
+  calc_hvp_inv = lambda model, grads, reg, X=X: calc_log_reg_hvp_inverse(model, X, grads, reg=reg)
   s_tests = calc_s_tests(unfair_model,
                          calc_hvp_inv,
                          calc_log_reg_dkl_grad,
@@ -245,6 +247,80 @@ def saf_provenance_analysis():
     except:
       pass
   cols_by_corr = sorted(corrs.items(), key=itemgetter(1))
+
+def saf_active_learning():
+  seed(1)
+  raw_train, raw_test = get_train_test_saf()
+  data = pd.concat([raw_train, raw_test])
+  X, y = [torch.tensor(arr) for arr in prepare_saf(data,
+                                                   target=['contrabn', 'adtlrept', 'pistol', 'riflshot', 'asltweap', 'knifcuti', 'machgun', 'othrweap'],
+                                                   protected='race',
+                                                   primary='W',
+                                                   no_cats=True)]
+
+  for num in [1000, 800, 500, 10]:
+    holdout_idxs = X[:, -1].nonzero()[-num:].squeeze()
+    keep_idxs = np.array(list(set(range(len(X))) - set(holdout_idxs.tolist())))
+    X_holdout = X[holdout_idxs]
+    y_holdout = y[holdout_idxs]
+    X_sampled = X[keep_idxs]
+    y_sampled = y[keep_idxs]
+
+    get_model = lambda: TorchLogisticRegression(X_sampled.shape[1])
+    trainer = Trainer(get_model, nn.BCELoss())
+    trainer.train(X_sampled, y_sampled, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
+    unfair_model = trainer.model
+    print('num W withheld', num)
+    print('acc:', eval_acc(unfair_model, X_sampled, y_sampled))
+    print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_sampled), np.log(eval_fairness(unfair_model, X_sampled)))
+
+    calc_hvp_inv = lambda model, grads, reg, X_sampled=X_sampled: calc_log_reg_hvp_inverse(model, X_sampled, grads, reg=reg)
+    s_tests = calc_s_tests(unfair_model,
+                           calc_hvp_inv,
+                           calc_log_reg_dkl_grad,
+                           X_sampled,
+                           y_sampled,
+                           reg=0.05)
+    influences = calc_influences(unfair_model,
+                                 calc_log_reg_grad,
+                                 s_tests,
+                                 X_sampled,
+                                 y_sampled).squeeze()
+
+    plt.figure()
+    plt.hist(np.log(np.abs(influences[X_sampled[:, -1].nonzero()].squeeze())), bins=100, label='W', density=True)
+    plt.hist(np.log(np.abs(influences[(~X_sampled[:, -1].byte()).nonzero()].squeeze())), bins=100, label='~W', density=True)
+    plt.legend()
+    plt.savefig('withhold_' + str(num) + 'W' + '.png')
+  plt.close()
+
+  calc_hvp_inv = lambda model, grads, reg, X=X: calc_log_reg_hvp_inverse(model, X, grads, reg=reg)
+  s_tests = calc_s_tests(unfair_model,
+                         calc_hvp_inv,
+                         calc_log_reg_dkl_grad,
+                         X,
+                         y,
+                         reg=0.05)
+  influences = calc_influences(unfair_model,
+                               calc_log_reg_grad,
+                               s_tests,
+                               X,
+                               y).squeeze()
+
+  # idxs_last_mode = (np.log(influences[X[:, -1].nonzero()].squeeze()) > -3).nonzero().squeeze()
+  # idxs_not_last_mode = (~(np.log(influences[X[:, -1].nonzero()].squeeze()) > -3)).nonzero().squeeze()
+  # X_last_mode = np.concatenate([np.concatenate([X[idxs_last_mode], X[idxs_not_last_mode]])], 1)
+  # y_last_mode = np.zeros(X[:, -1].sum().int())
+  # y_last_mode[:len(idxs_last_mode)] = 1
+  # pca = PCA(n_components=2, whiten=True)
+  # plt.scatter(*pca.fit_transform(X_last_mode).T, c=((data.frisked == 'Y')[(data.race == 'W')]))
+  # model = DecisionTreeClassifier(max_depth=3)
+  # model = LogisticRegression()
+  # model.fit(X_last_mode, y_last_mode)
+  # dot_data = tree.export_graphviz(model, out_file=None)
+  # graph = graphviz.Source(dot_data)
+  # graph.render("last_mode")
+
 
 def main():
   # adult_analysis()

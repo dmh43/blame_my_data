@@ -325,6 +325,75 @@ def saf_active_learning():
   # graph = graphviz.Source(dot_data)
   # graph.render("last_mode")
 
+def saf_predict_inf():
+  seed(1)
+  raw_train, raw_test = get_train_test_saf()
+  data = pd.concat([raw_train, raw_test])
+  X, y = [torch.tensor(arr) for arr in prepare_saf(data,
+                                                   target=['contrabn', 'adtlrept', 'pistol', 'riflshot', 'asltweap', 'knifcuti', 'machgun', 'othrweap'],
+                                                   protected='race',
+                                                   primary='W',
+                                                   no_cats=True)]
+
+  # X_train = X[:len(raw_train)]
+  # y_train = y[:len(raw_train)]
+  # X_test  = X[len(raw_train):len(raw_train) + len(raw_test)]
+  # y_test  = y[len(raw_train):len(raw_train) + len(raw_test)]
+
+  infs = []
+  for pct in data.pct.unique():
+    infs.append((pct, calc_fairness(X[(raw_train.pct == pct).nonzero()],
+                                    y[(raw_train.pct == pct).nonzero()]).item()))
+
+  print(sorted(infs, key=itemgetter(1)))
+
+  pct = ~(raw_train.pct == 13)
+  # pct = raw_train.pct < 70
+  not_pct = ~pct
+  pct = pct.nonzero()[0]
+  not_pct = not_pct.nonzero()[0]
+  X_train = X[pct]
+  y_train = y[pct]
+  X_test  = X[not_pct]
+  y_test  = y[not_pct]
+  print('train: KL p(y | nonwhite), p(y | white)', calc_fairness(X_train, y_train))
+  print('test: KL p(y | nonwhite), p(y | white)', calc_fairness(X_test, y_test))
+  get_model = lambda: TorchLogisticRegression(X_train.shape[1])
+  trainer = Trainer(get_model, nn.BCELoss())
+  trainer.train(X_train, y_train, batch_size=1000, num_epochs=100, reg=0.0, verbose=False)
+  unfair_model = trainer.model
+  print('acc:', eval_acc(unfair_model, X_test, y_test))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_train))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_test))
+  calc_hvp_inv = lambda model, grads, reg: calc_log_reg_hvp_inverse(model, X_train, grads, reg=reg)
+  s_tests = calc_s_tests(unfair_model,
+                         calc_hvp_inv,
+                         calc_log_reg_dkl_grad,
+                         X_test,
+                         y_test,
+                         reg=0.05)
+  influences = calc_influences(unfair_model,
+                               calc_log_reg_grad,
+                               s_tests,
+                               X_train,
+                               y_train).squeeze()
+  idxs_to_drop = (influences > 0).nonzero()[:, 0]
+  not_idxs_to_drop = (influences <= 0).nonzero()[:, 0]
+  trainer.retrain_leave_one_out(X_train, y_train, idxs_to_drop, reg=0.0, batch_size=1000, num_epochs=100, verbose=False)
+  fair_model = trainer.model
+  print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_train))
+  print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_test))
+  print('acc:', eval_acc(fair_model, X_test, y_test))
+
+  model = DecisionTreeClassifier(max_depth=3)
+  model.fit(X_train, influences > 0)
+  dot_data = tree.export_graphviz(model, out_file=None)
+  graph = graphviz.Source(dot_data)
+  graph.render("pred_inf")
+
+  model = LogisticRegression()
+  model.fit(X_train, influences > 0)
+
 
 def main():
   # adult_analysis()

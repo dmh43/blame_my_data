@@ -1,3 +1,11 @@
+* Notes
+- Can reduce unfairness on adult dataset
+- on stop and frisk, measuring more data reduces your unfairness more than intelligently dropping points
+  - connect to why is my classifier discriminatory
+  - can still compute influence of each points and make a map
+- domain transfer?
+* omitted
+
 \begin{table}[htbp]
 \caption{Distribution of training points dropped by influence approach. Perhaps surprisingly, this approach drops training points that we would expect to help the protected class. This suggests that the influence functions approach is making a more informed decision than simply rebalancing the training data. This is confirmed by the experimental results in table \ref{tab:results}}
 \centering

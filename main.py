@@ -16,7 +16,6 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
 from sklearn import tree
-import graphviz
 
 import pydash as _
 
@@ -335,10 +334,14 @@ def saf_predict_inf():
                                                    primary='W',
                                                    no_cats=True)]
 
-  # X_train = X[:len(raw_train)]
-  # y_train = y[:len(raw_train)]
-  # X_test  = X[len(raw_train):len(raw_train) + len(raw_test)]
-  # y_test  = y[len(raw_train):len(raw_train) + len(raw_test)]
+  X_train = X[:len(raw_train)]
+  y_train = y[:len(raw_train)]
+  X_test  = X[len(raw_train):len(raw_train) + len(raw_test)]
+  y_test  = y[len(raw_train):len(raw_train) + len(raw_test)]
+
+  _idxs = ((1 - X_train[:, -1]) + X_train[:, -1] * (1 - y_train)).nonzero().squeeze()
+  X_train = X_train[_idxs]
+  y_train = y_train[_idxs]
 
   infs = []
   for pct in data.pct.unique():
@@ -347,15 +350,17 @@ def saf_predict_inf():
 
   print(sorted(infs, key=itemgetter(1)))
 
-  pct = ~(raw_train.pct == 13)
+  pct = ~(raw_train.pct == 67)
   # pct = raw_train.pct < 70
   not_pct = ~pct
+  # not_pct = (raw_train.pct == 77)
   pct = pct.nonzero()[0]
   not_pct = not_pct.nonzero()[0]
   X_train = X[pct]
   y_train = y[pct]
   X_test  = X[not_pct]
   y_test  = y[not_pct]
+
   print('train: KL p(y | nonwhite), p(y | white)', calc_fairness(X_train, y_train))
   print('test: KL p(y | nonwhite), p(y | white)', calc_fairness(X_test, y_test))
   get_model = lambda: TorchLogisticRegression(X_train.shape[1])

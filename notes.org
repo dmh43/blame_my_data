@@ -3,6 +3,7 @@
 - on stop and frisk, measuring more data reduces your unfairness more than intelligently dropping points
   - connect to why is my classifier discriminatory
   - can still compute influence of each points and make a map
+  - Stops in Manhattan are helpful in terms of fairness. This suggests that the trained model learns to associate features correlated with race primarily from stops in in other regions.
 - domain transfer?
 * omitted
 

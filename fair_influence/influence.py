@@ -3,7 +3,7 @@ import torch
 def calc_log_reg_hessian(model, data):
   with torch.no_grad():
     out = model(data)
-    return (data.t() * out).matmul(data) / len(data)
+    return (data.t() * out * (1 - out)).matmul(data) / len(data)
 
 def calc_log_reg_hessian_inverse(model, data, reg=0.01):
   hessian = calc_log_reg_hessian(model, data)

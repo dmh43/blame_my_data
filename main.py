@@ -19,7 +19,7 @@ from sklearn import tree
 
 import pydash as _
 
-from fair_influence.fetchers import get_train_test_adult, get_train_test_saf
+from fair_influence.fetchers import get_train_test_adult, get_train_test_saf, get_train_test_synth
 from fair_influence.preprocessing import prepare_adult, prepare_saf
 from fair_influence.logistic_regression import TorchLogisticRegression
 from fair_influence.fairness import calc_fairness, calc_pred_fairness, make_more_fair_retrain, eval_fairness
@@ -350,7 +350,7 @@ def saf_predict_inf():
 
   print(sorted(infs, key=itemgetter(1)))
 
-  pct = ~(raw_train.pct == 67)
+  pct = ~(raw_train.pct == 106)
   # pct = raw_train.pct < 70
   not_pct = ~pct
   # not_pct = (raw_train.pct == 77)
@@ -390,14 +390,45 @@ def saf_predict_inf():
   print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_test))
   print('acc:', eval_acc(fair_model, X_test, y_test))
 
-  model = DecisionTreeClassifier(max_depth=3)
-  model.fit(X_train, influences > 0)
+
+def synth():
+  rn.seed(1)
+  X_train, y_train, X_test, y_test = (torch.tensor(arr) for arr in get_train_test_synth(n=10000))
+  print('train: KL p(y | nonwhite), p(y | white)', calc_fairness(X_train, y_train))
+  print('test: KL p(y | nonwhite), p(y | white)', calc_fairness(X_test, y_test))
+  get_model = lambda: TorchLogisticRegression(X_train.shape[1])
+  trainer = Trainer(get_model, nn.BCELoss())
+  trainer.train(X_train, y_train, batch_size=1000, num_epochs=500, reg=0.0, verbose=False)
+  unfair_model = trainer.model
+  print('acc:', eval_acc(unfair_model, X_test, y_test))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_train))
+  print('model: KL p(y | nonwhite), p(y | white)', eval_fairness(unfair_model, X_test))
+  calc_hvp_inv = lambda model, grads, reg: calc_log_reg_hvp_inverse(model, X_train, grads, reg=reg)
+  s_tests = calc_s_tests(unfair_model,
+                         calc_hvp_inv,
+                         calc_log_reg_dkl_grad,
+                         X_test,
+                         y_test,
+                         reg=0.05)
+  influences = calc_influences(unfair_model,
+                               calc_log_reg_grad,
+                               s_tests,
+                               X_train,
+                               y_train).squeeze()
+  idxs_to_drop = (influences > 0).nonzero()[:, 0]
+  not_idxs_to_drop = (influences <= 0).nonzero()[:, 0]
+  trainer.retrain_leave_one_out(X_train, y_train, idxs_to_drop, reg=0.0, batch_size=1000, num_epochs=500, verbose=False)
+  fair_model = trainer.model
+  print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_train))
+  print('model retrain: KL p(y | nonwhite), p(y | white)', eval_fairness(fair_model, X_test))
+  print('acc:', eval_acc(fair_model, X_test, y_test))
+
+  model = DecisionTreeClassifier(max_depth=2)
+  model.fit(X_train, np.float32(influences > 0))
   dot_data = tree.export_graphviz(model, out_file=None)
   graph = graphviz.Source(dot_data)
-  graph.render("pred_inf")
-
-  model = LogisticRegression()
-  model.fit(X_train, influences > 0)
+  graph.render("high_influence")
+  print('most important feature is', np.argmax(model.feature_importances_))
 
 
 def main():
